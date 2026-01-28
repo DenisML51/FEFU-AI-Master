@@ -1,5 +1,6 @@
 import sys
 
+
 def main():
     lines = [line.strip() for line in sys.stdin if line.strip()]
     if not lines:
@@ -19,7 +20,7 @@ def main():
         test_data.append(lines[i].split())
 
     best_feature_idx = 0
-    min_errors = float('inf')
+    min_errors = float("inf")
     best_rules = {}
 
     for j in range(k):
@@ -38,14 +39,15 @@ def main():
             prediction = 1 if counts[1] >= counts[0] else 0
             current_rules[val] = prediction
             current_errors += counts[0 if prediction == 1 else 1]
-       if current_errors < min_errors:
+        if current_errors < min_errors:
             min_errors = current_errors
             best_feature_idx = j
             best_rules = current_rules
- 
+
     for row in test_data:
         val = row[best_feature_idx]
         print(best_rules[val])
+
 
 if __name__ == "__main__":
     main()

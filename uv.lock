@@ -54,6 +54,21 @@ wheels = [
 ]
 
 [[package]]
+name = "deap"
+version = "1.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c9/37/3a3d82ca07e9eb2d8cdc1979ff82add35f1b41988c984db53ae582959c13/deap-1.4.3.tar.gz", hash = "sha256:7c97088fb05835bdc255bec475cb0e778de2b43e44cbefbf2bcd655aeec865fd", size = 1072325, upload-time = "2025-05-04T12:26:15.237Z" }
+
+[[package]]
+name = "deep"
+version = "0.10"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/44/0d/ae234be6c9595329de866a17bfb85b41d4761e6252bda9e227559f6f51a7/deep-0.10.tar.gz", hash = "sha256:fd692023d65b21c11bdaa38f7b5264d195d2ed678ffc82f841a4a320a8e0127b", size = 18557, upload-time = "2016-02-28T02:08:03.86Z" }
+
+[[package]]
 name = "et-xmlfile"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -67,6 +82,8 @@ name = "fefu-ai-master"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "deap" },
+    { name = "deep" },
     { name = "numpy" },
     { name = "openpyxl" },
     { name = "pandas" },
@@ -78,6 +95,8 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "deap", specifier = ">=1.4.3" },
+    { name = "deep", specifier = ">=0.10" },
     { name = "numpy", specifier = ">=2.4.1" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pandas", specifier = ">=2.3.3" },
