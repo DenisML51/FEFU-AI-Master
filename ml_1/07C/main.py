@@ -28,7 +28,7 @@ def read_input(
         raise ValueError("Ошибка чтения файла.")
 
 
-print("Загрузка данных...")
+print("Загрузка данных..as;ldkfjasdlfj.")
 N_TASKS, N_DEVS, TASK_CATS, TASK_ESTIMATES, DEV_COEFFS = read_input("input.txt")
 
 REAL_TIMES = np.zeros((N_DEVS, N_TASKS), dtype=np.float64)
