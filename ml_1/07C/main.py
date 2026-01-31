@@ -1,7 +1,6 @@
 import numpy as np
 import random
-from deap import base, creator, tools, algorithms
-from typing import Tuple, List
+from typing import Tuple
 
 
 def read_input(
@@ -11,104 +10,161 @@ def read_input(
         content = f.read().split()
 
     iterator = iter(content)
-
     try:
         n_tasks = int(next(iterator))
         task_cats = np.array(
-            [int(next(iterator)) - 1 for _ in range(n_tasks)], dtype=int
+            [int(next(iterator)) - 1 for _ in range(n_tasks)], dtype=np.int32
         )
         task_estimates = np.array(
-            [float(next(iterator)) for _ in range(n_tasks)], dtype=float
+            [float(next(iterator)) for _ in range(n_tasks)], dtype=np.float64
         )
-
         m_devs = int(next(iterator))
-        dev_coeffs = np.zeros((m_devs, 4))
-
+        dev_coeffs = np.zeros((m_devs, 4), dtype=np.float64)
         for i in range(m_devs):
             for c in range(4):
                 dev_coeffs[i, c] = float(next(iterator))
-
         return n_tasks, m_devs, task_cats, task_estimates, dev_coeffs
-
     except StopIteration:
-        raise ValueError("Входной файл имеет неверный формат")
+        raise ValueError("Ошибка чтения файла.")
 
 
 print("Загрузка данных...")
 N_TASKS, N_DEVS, TASK_CATS, TASK_ESTIMATES, DEV_COEFFS = read_input("input.txt")
 
-REAL_TIMES: np.ndarray = np.zeros((N_DEVS, N_TASKS), dtype=np.float64)
-
+REAL_TIMES = np.zeros((N_DEVS, N_TASKS), dtype=np.float64)
 for dev_idx in range(N_DEVS):
     REAL_TIMES[dev_idx, :] = TASK_ESTIMATES * DEV_COEFFS[dev_idx, TASK_CATS]
 
-creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
-creator.create("Individual", list, fitness=creator.FitnessMin)
 
-toolbox = base.Toolbox()
-toolbox.register("attr_dev_idx", random.randint, 0, N_DEVS - 1)
-toolbox.register(
-    "individual", tools.initRepeat, creator.Individual, toolbox.attr_dev_idx, n=N_TASKS
-)
-toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+class GeneticSolver:
+    def __init__(
+        self,
+        n_tasks: int,
+        n_devs: int,
+        pop_size: int = 500,
+        tourn_size: int = 5,
+        mutation_prob: float = 0.05,
+    ):
+        self.n_tasks = n_tasks
+        self.n_devs = n_devs
+        self.pop_size = pop_size
+        self.tourn_size = tourn_size
+        self.mut_prob = mutation_prob
 
+        self.population = np.random.randint(
+            0, n_devs, size=(pop_size, n_tasks), dtype=np.int32
+        )
+        self.fitnesses = np.zeros(pop_size)
 
-def evaluate_schedule(individual: List[int]) -> Tuple[float]:
-    assignment = np.array(individual)
-    task_times = REAL_TIMES[assignment, np.arange(N_TASKS)]
-    dev_total_loads = np.bincount(assignment, weights=task_times, minlength=N_DEVS)
-    return (np.max(dev_total_loads),)
+        self.best_ind = None
+        self.best_fit = float("inf")
 
+    def calc_fitness(self):
+        for i in range(self.pop_size):
+            individual = self.population[i]
 
-toolbox.register("evaluate", evaluate_schedule)
-toolbox.register("mate", tools.cxTwoPoints)
-toolbox.register("mutate", tools.mutUniformInt, low=0, up=N_DEVS - 1, indpb=0.05)
-toolbox.register("select", tools.selTournament, tournsize=4)
+            times = REAL_TIMES[individual, np.arange(self.n_tasks)]
 
+            dev_loads = np.bincount(individual, weights=times, minlength=self.n_devs)
 
-def main():
-    random.seed(1488)
-    np.random.seed(1488)
+            t_max = np.max(dev_loads)
+            self.fitnesses[i] = t_max
 
-    POP_SIZE = 400
-    NGEN = 1000
-    CXPB = 0.6
-    MUTPB = 0.35
+            if t_max < self.best_fit:
+                self.best_fit = t_max
+                self.best_ind = individual.copy()
 
-    pop = toolbox.population(n=POP_SIZE)
-    hof = tools.HallOfFame(1)
+    def selection(self) -> np.ndarray:
+        competitors = np.random.randint(
+            0, self.pop_size, size=(self.pop_size, self.tourn_size)
+        )
 
-    stats = tools.Statistics(lambda ind: ind.fitness.values)
-    stats.register("min", np.min)
+        comp_fitness = self.fitnesses[competitors]
 
-    algorithms.eaMuPlusLambda(
-        pop,
-        toolbox,
-        mu=POP_SIZE,
-        lambda_=POP_SIZE,
-        cxpb=CXPB,
-        mutpb=MUTPB,
-        ngen=NGEN,
-        stats=stats,
-        halloffame=hof,
-        verbose=True,
-    )
+        winners_indices_local = np.argmin(comp_fitness, axis=1)
 
-    return hof[0]
+        row_indices = np.arange(self.pop_size)
+        winners_indices_global = competitors[row_indices, winners_indices_local]
+
+        new_pop = self.population[winners_indices_global].copy()
+
+        return new_pop
+
+    def crossover(self, pop: np.ndarray, cx_prob: float = 0.7):
+        for i in range(0, self.pop_size - 1, 2):
+            if np.random.random() < cx_prob:
+                parent1 = pop[i]
+                parent2 = pop[i + 1]
+
+                pt1 = np.random.randint(1, self.n_tasks - 1)
+                pt2 = np.random.randint(1, self.n_tasks - 1)
+
+                if pt1 > pt2:
+                    pt1, pt2 = pt2, pt1
+                elif pt1 == pt2:
+                    pt2 += 1
+
+                segment_tmp = parent1[pt1:pt2].copy()
+                parent1[pt1:pt2] = parent2[pt1:pt2]
+                parent2[pt1:pt2] = segment_tmp
+
+    def mutation(self, pop: np.ndarray):
+        random_matrix = np.random.random(pop.shape)
+
+        mutation_mask = random_matrix < self.mut_prob
+
+        count_mutations = np.sum(mutation_mask)
+        new_values = np.random.randint(0, self.n_devs, size=int(count_mutations))
+
+        pop[mutation_mask] = new_values
+
+    def solve(self, n_gens: int):
+        print(f"Старт эволюции на {n_gens} поколений. Популяция: {self.pop_size}")
+
+        self.calc_fitness()
+        print(f"Gen 0: Best Tmax = {self.best_fit:.4f}")
+
+        for gen in range(1, n_gens + 1):
+            offspring = self.selection()
+
+            self.crossover(offspring, cx_prob=0.7)
+
+            self.mutation(offspring)
+
+            self.population = offspring
+
+            self.calc_fitness()
+
+            worst_idx = np.argmax(self.fitnesses)
+            self.population[worst_idx] = self.best_ind
+            self.fitnesses[worst_idx] = self.best_fit
+
+            if gen % 100 == 0:
+                print(f"Gen {gen}: Best Tmax = {self.best_fit:.4f}")
+
+        return self.best_ind, self.best_fit
 
 
 if __name__ == "__main__":
-    best_ind = main()
-    t_max = evaluate_schedule(best_ind)[0]
-    score = 10**6 / t_max
+    random.seed(42)
+    np.random.seed(42)
 
-    print("Оптимизация завершена")
-    print(f"Лучший Tmax: {t_max:.4f}")
-    print(f"Расчитанный счет: {int(score)}")
+    solver = GeneticSolver(
+        n_tasks=N_TASKS, n_devs=N_DEVS, pop_size=500, tourn_size=5, mutation_prob=0.01
+    )
 
-    solution_1_based = [x + 1 for x in best_ind]
+    best_genome, best_time = solver.solve(n_gens=2000)
 
+    score = 10**6 / best_time
+
+    print("\n" + "=" * 30)
+    print(f"ФИНАЛ: {best_time:.4f}")
+    print(f"SCORE: {int(score)}")
+    print(f"Stat: {int(score) / 10000}")
+    print("=" * 30)
+
+    output_indices = [x + 1 for x in np.array(best_genome)]
     with open("output.txt", "w") as f:
-        f.write(" ".join(map(str, solution_1_based)))
+        f.write(" ".join(map(str, output_indices)))
 
-    print("Ответ сохранен в файл")
+    print("Результат сохранен в output.txt")
